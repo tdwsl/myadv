@@ -5,15 +5,12 @@
 #include <string.h>
 #include <assert.h>
 
-#define MAX_VERBS 20
-#define NUM_DIRS 10
-
 struct object {
     char *name;
     char *title;
     char *at;
-    char *verbs[MAX_VERBS];
-    char *verbNames[MAX_VERBS];
+    char *verbs[20];
+    char *verbNames[20];
     int numVerbs;
 };
 
@@ -21,7 +18,7 @@ struct location {
     char *name;
     char *title;
     char *description;
-    char *exits[NUM_DIRS];
+    char *exits[10];
 };
 
 struct object defobj;
@@ -34,12 +31,42 @@ char *currentObject=0;
 char *words[30];
 int numWords=0;
 int nextWordIndex;
+char *variables[200];
+char *variableNames[200];
+int numVariables=0;
+char *validVerbs[30];
+int numValidVerbs=0;
 const char *dirStrings[] = {
     "north", "east", "south", "west",
-    "north-east", "south-east", "north-west", "south-west",
+    "north-east", "south-east", "northwest", "southwest",
     "up", "down",
 };
 const char *dStrings[] = { "n","e","s","w","ne","se","nw","sw","u","d", };
+
+char *getVariable(char *name) {
+    int i;
+    for(i = 0; i < numVariables; i++)
+        if(!strcmp(name, variableNames[i]))
+            return variables[i];
+    return 0;
+}
+
+void setVariable(char *name, char *val) {
+    int i;
+    for(i = 0; i < numVariables; i++)
+        if(!strcmp(name, variableNames[i])) {
+            free(variables[i]);
+            free(variableNames[i]);
+            variables[i] = variables[--numVariables];
+            variables[i] = variables[numVariables];
+            break;
+        }
+
+    variables[numVariables] = malloc(strlen(val)+1);
+    strcpy(variables[numVariables], val);
+    variableNames[numVariables] = malloc(strlen(name)+1);
+    strcpy(variableNames[numVariables++], name);
+}
 
 void addVerb(struct object *o, char *verbName, char *verb) {
     int i;
@@ -115,19 +142,10 @@ const char *boolStr(int c) {
 
 int getDIndex(char *d) {
     int i;
-    switch(d[0]) {
-    case 'n': i = 0; break;
-    case 'e': i = 1; break;
-    case 's': i = 2; break;
-    case 'w': i = 3; break;
-    case 'u': i = 8; break;
-    case 'd': i = 9; break;
-    }
-    if(d[1] == 'w')
-        i += 4;
-    else if(d[1] == 'e')
-        i += 6;
-    return i;
+    for(i = 0; i < 10; i++)
+        if(!strcmp(d, dStrings[i]))
+            return i;
+    return 0;
 }
 
 int listItems(const char *pre, char *lname);
@@ -260,6 +278,25 @@ void eval(const char *filename, char *text) {
                 r = boolStr(atoi(symbols[i+1]) >= atoi(symbols[i+2]));
             else if(!strcmp(a, "<="))
                 r = boolStr(atoi(symbols[i+1]) <= atoi(symbols[i+2]));
+            else if(!strcmp(a, "and")) {
+                d = 1;
+                for(j = i+1; j < numSymbols && d; j++)
+                    if(!strcmp(symbols[j], "nil")) d = 0;
+                if(d) r = "t";
+                else r = "nil";
+            }
+            else if(!strcmp(a, "set-var"))
+                setVariable(symbols[i+1], symbols[i+2]);
+            else if(!strcmp(a, "get-var")) {
+                r = getVariable(symbols[i+1]);
+                if(!r) r = "nil";
+            }
+            else if(!strcmp(a, "valid")) {
+                for(j = i+1; j < numSymbols; j++) {
+                    validVerbs[numValidVerbs] = malloc(strlen(symbols[j])+1);
+                    strcpy(validVerbs[numValidVerbs++], symbols[j]);
+                }
+            }
             else if(!strcmp(a, "has"))
                 r = boolStr(locationHas(symbols[i+1], symbols[i+2]));
             else if(!strcmp(a, "here"))
@@ -301,6 +338,12 @@ void eval(const char *filename, char *text) {
                 strcpy(l->title, symbols[i+2]);
                 l->description = malloc(strlen(symbols[i+3])+1);
                 strcpy(l->description, symbols[i+3]);
+            }
+            else if(!strcmp(a, "description")) {
+                l = findLocation(symbols[i+1]);
+                free(l->description);
+                l->description = malloc(strlen(symbols[i+2])+1);
+                strcpy(l->description, symbols[i+2]);
             }
             else if(!strcmp(a, "items")) {
                 sprintf(s, "%d", locationObjectNum(symbols[i+1]));
@@ -434,12 +477,12 @@ void listDirections(struct location *l, const char *pre, const char **strings) {
     int i, j, n;
 
     n = 0;
-    for(i = 0; i < NUM_DIRS; i++)
+    for(i = 0; i < 10; i++)
         if(l->exits[i]) n++;
     if(n) {
         i = 0;
         printf(pre);
-        for(j = 0; j < NUM_DIRS; j++)
+        for(j = 0; j < 10; j++)
             if(l->exits[j]) {
                 printf(strings[j]);
                 listJoint(i, n);
@@ -464,9 +507,6 @@ int main() {
     char comma = 0, unf = 0;
     struct location *l;
     struct object *o;
-    const char *validVerbs[] = {
-        "eat","read", "and", "examine", "take", "drop", "open", "close", "lock", "unlock", 0
-    };
 
     eval("adv.sal", 0);
 
@@ -507,7 +547,7 @@ outer:
 
         /* go direction */
         l = findLocation(currentLocation);
-        for(i = 0; i < NUM_DIRS; i++)
+        for(i = 0; i < 10; i++)
             if(!strcmp(verb, dStrings[i]) || !strcmp(verb, dirStrings[i])) {
                 if(l->exits[i]) {
                     currentLocation = l->exits[i];
@@ -532,7 +572,7 @@ outer:
         }
 
         f = 0;
-        for(i = 0; validVerbs[i] && !f; i++)
+        for(i = 0; i < numValidVerbs && !f; i++)
             if(!strcmp(validVerbs[i], verb))
                 f = 1;
         if(!f && !unf) {
