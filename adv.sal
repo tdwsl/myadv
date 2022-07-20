@@ -1,0 +1,77 @@
+; the script for the adventure
+; sal stands for silly adventure lisp
+
+;; default verbs
+(default take
+  '(if (has inventory (x))
+    '(print "You already have that.")
+    '(if (>= (items inventory) 10)
+      '(print "You can't carry any more.")
+      '(begin
+        (set-at (x) inventory)
+        (print "Took " (x) .)))))
+
+(default drop
+  '(if (has inventory (x))
+    '(begin
+      (set-at (x) (here))
+      (print "Dropped " (x) .))
+    '(print "You don't have that.")))
+
+(default examine
+  '(begin
+    (list-objects items "It contains ")
+    (print "You see nothing special about it.")))
+
+(default eat
+  '(if (has inventory (x))
+    '(begin
+      (print "You eat the " (x) " - yum.")
+      (set-at (x) void))
+    '(print "You don't have that.")))
+;; end default verbs
+
+;; containers
+(location inventory "Your Pockets" "This place is always with you, but you shouldn't be inside it!")
+(location void "The Void" "You shouldn't be here! This is where objects go to die.")
+;; end containers
+
+(location house-front "Front of House" "You are standing outside of the house.")
+(goto house-front)
+
+(object door "a door" house-front)
+(how door take
+  '(print "It's too heavy."))
+(how door open
+  '(print "It's locked."))
+(how door lock
+  '(print "And why would you want to do that?"))
+(how door examine
+  '(begin
+    (print "To the north, a sturdy door built from oak.")
+    (if (= (get-exit house-front n) living-room)
+      '(print "Through it you can see the living room.")
+      '(print "It is closed."))))
+(how door unlock
+  '(if (has inventory key)
+    '(begin
+      (print "You unlock the door.")
+      (how door open
+        '(if (= (get-exit house-front n) living-room)
+          '(print "It's already open.")
+          '(begin
+            (print "You open the door.")
+            (set-exit house-front n living-room))))
+      (how door unlock '(print "It's not locked.")))
+    '(print "You don't have a key.")))
+(how door close
+  '(if (= (get-exit house-front n) living-room)
+    '(begin
+      (print "You close the door.")
+      (set-exit house-front n nil))
+    '(print "It isn't open.")))
+(how door take nil)
+
+(object key "a silver key" house-front)
+(object rock "a small rock" house-front)
+
