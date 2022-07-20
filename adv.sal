@@ -75,3 +75,5 @@
 (object key "a silver key" house-front)
 (object rock "a small rock" house-front)
 
+(location living-room "Living Room" "The room has green walls and plank flooring.")
+(set-exit living-room s house-front)
