@@ -2,8 +2,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <assert.h>
+
+#define COLUMN_WIDTH 79
 
 struct object {
     char *name;
@@ -38,10 +41,35 @@ char *validVerbs[30];
 int numValidVerbs=0;
 const char *dirStrings[] = {
     "north", "east", "south", "west",
-    "north-east", "south-east", "northwest", "southwest",
+    "northeast", "southeast", "northwest", "southwest",
     "up", "down",
 };
 const char *dStrings[] = { "n","e","s","w","ne","se","nw","sw","u","d", };
+int column=0;
+
+void printwr(const char *fmt, ...) {
+    va_list valist;
+    char buf[480];
+    int i, j, last=0;
+    char white=0;
+
+    va_start(valist, fmt);
+    vsprintf(buf, fmt, valist);
+    va_end(valist);
+
+    for(i = 0; ; i++) {
+        if(column++ == 0) printf(" ");
+        if(column >= COLUMN_WIDTH) { printf("\n "); column = 1; }
+        if(buf[i] <= ' ') {
+            if(!white)
+                for(j = last; j <= i; j++) printf("%c", buf[j]);
+            white = 1;
+            if(buf[i] == '\n') column = 0;
+            if(buf[i] == 0) break;
+        }
+        else if(white) { last = i; white = 0; }
+    }
+}
 
 char *getVariable(char *name) {
     int i;
@@ -132,7 +160,7 @@ void doVerb(struct object *o, char *verbName) {
             eval(0, o->verbs[i]);
             return;
         }
-    printf("You can't %s that!\n", verbName);
+    printwr("You can't %s that!\n", verbName);
 }
 
 const char *boolStr(int c) {
@@ -151,7 +179,7 @@ int getDIndex(char *d) {
 int listItems(const char *pre, char *lname);
 
 void eval(const char *filename, char *text) {
-    char *symbols[100];
+    char *symbols[300];
     int numSymbols = 0;
     FILE *fp;
     char c;
@@ -306,19 +334,17 @@ void eval(const char *filename, char *text) {
                 currentLocation = malloc(strlen(symbols[i+1])+1);
                 strcpy(currentLocation, symbols[i+1]);
                 l = findLocation(currentLocation);
-                printf("[%s]\n", l->title);
+                printwr("[%s]\n", l->title);
             }
-            else if(!strcmp(a, "list-objects"))
-                listItems(symbols[i+2], symbols[i+1]);
             else if(!strcmp(a, "object")) {
                 o = &objects[numObjects++];
                 memcpy(o, &defobj, sizeof(struct object));
                 for(j = 0; j < o->numVerbs; j++) {
                     r = o->verbs[j];
-                    o->verbs[j] = malloc(strlen(r));
+                    o->verbs[j] = malloc(strlen(r)+1);
                     strcpy(o->verbs[j], r);
                     r = o->verbNames[j];
-                    o->verbNames[j] = malloc(strlen(r));
+                    o->verbNames[j] = malloc(strlen(r)+1);
                     strcpy(o->verbNames[j], r);
                 }
                 r = 0;
@@ -378,8 +404,8 @@ void eval(const char *filename, char *text) {
             }
             else if(!strcmp(a, "print")) {
                 for(j = i+1; j < numSymbols; j++)
-                    printf("%s", symbols[j]);
-                printf("\n");
+                    printwr("%s", symbols[j]);
+                printwr("\n");
             }
             else if(!strcmp(a, "+")) {
                 sprintf(s, "%d", atoi(symbols[i+1])+atoi(symbols[i+2]));
@@ -420,21 +446,33 @@ void eval(const char *filename, char *text) {
 
 void readWords() {
     char s[200];
+    char line[480];
     int i;
+    char c;
 
     for(i = 0; i < numWords; i++)
         free(words[i]);
 
-    printf(">");
+    printwr(">");
+    column = 0;
     numWords = 0;
-    do {
-        scanf("%s", s);
-        for(i = 0; s[i]; i++)
-            if(s[i] >= 'A' && s[i] <= 'Z')
-                s[i] += 'a'-'A';
-        words[numWords] = malloc(strlen(s)+1);
-        strcpy(words[numWords++], s);
-    } while(fgetc(stdin) != '\n');
+
+    i = 0;
+    for(c = fgetc(stdin); ; c = fgetc(stdin)) {
+        if(c == '\n' || c == ' ' || c == '\t') {
+            if(i) {
+                s[i++] = 0;
+                words[numWords] = malloc(i);
+                strcpy(words[numWords++], s);
+            }
+            if(c == '\n') break;
+            i = 0;
+        }
+        else
+            s[i++] = c;
+    }
+
+    words[numWords] = 0;
     nextWordIndex = 0;
 }
 
@@ -444,11 +482,13 @@ char *nextWord() {
     return words[nextWordIndex++];
 }
 
-void listJoint(int i, int n) {
-    if(i < n-2)
-        printf(", ");
-    else if(i < n-1)
-        printf(" and ");
+void listItem(int i, int n, char *s) {
+    if(i == n-1)
+        printwr("%s.\n", s);
+    else if(i < n-2)
+        printwr("%s, ", s);
+    else
+        printwr("%s and ", s);
 }
 
 int listItems(const char *pre, char *lname) {
@@ -456,21 +496,19 @@ int listItems(const char *pre, char *lname) {
     n = locationObjectNum(lname);
     if(n) {
         i = 0;
-        printf(pre);
+        printwr(pre);
         for(j = 0; j < numObjects; j++)
             if(!strcmp(objects[j].at, lname)) {
-                printf("%s", objects[j].title);
-                listJoint(i, n);
+                listItem(i, n, objects[j].title);
                 i++;
             }
-        printf(".\n");
     }
     return n;
 }
 
 void takeInventory() {
     if(!listItems("You are carrying ", "inventory"))
-        printf("You are not carrying anything.\n");
+        printwr("You are not carrying anything.\n");
 }
 
 void listDirections(struct location *l, const char *pre, const char **strings) {
@@ -481,21 +519,19 @@ void listDirections(struct location *l, const char *pre, const char **strings) {
         if(l->exits[i]) n++;
     if(n) {
         i = 0;
-        printf(pre);
+        printwr(pre);
         for(j = 0; j < 10; j++)
             if(l->exits[j]) {
-                printf(strings[j]);
-                listJoint(i, n);
+                listItem(i, n, (char*)strings[j]);
                 i++;
             }
-        printf(".\n");
     }
 }
 
 void describe() {
     struct location *l;
     l = findLocation(currentLocation);
-    printf("%s\n", l->description);
+    printwr("%s\n", l->description);
     listItems("You see here ", currentLocation);
     listDirections(l, "You can exit ", dirStrings);
 }
@@ -533,14 +569,14 @@ outer:
         }
 
         if(!strcmp(verb, "quit") || !strcmp(verb, "q")) {
-            printf("Bye-bye!\n");
+            printwr("Bye-bye!\n");
             break;
         }
 
         if(!strcmp(verb, "go") || !strcmp(verb, "move")) {
             verb = nextWord();
             if(!verb) {
-                printf("Which direction?\n");
+                printwr("Which direction?\n");
                 continue;
             }
         }
@@ -552,10 +588,10 @@ outer:
                 if(l->exits[i]) {
                     currentLocation = l->exits[i];
                     l = findLocation(currentLocation);
-                    printf("[%s]\n", l->title);
+                    printwr("[%s]\n", l->title);
                 }
                 else
-                    printf("You can't go that way.\n");
+                    printwr("You can't go that way.\n");
                 readWords();
                 goto outer;
             }
@@ -576,14 +612,14 @@ outer:
             if(!strcmp(validVerbs[i], verb))
                 f = 1;
         if(!f && !unf) {
-            printf("%s?\n", verb);
+            printwr("%s?\n", verb);
             continue;
         }
         if(f)
             unf = 0;
 
         if(!words[nextWordIndex] && !unf && !comma) {
-            printf("%s what?\n", verb);
+            printwr("%s what?\n", verb);
             unf = 1;
             lastVerb = verb;
             continue;
@@ -610,12 +646,12 @@ outer:
 
         o = findObject(noun);
         if(!o) {
-            printf("You know no such thing.\n");
+            printwr("You know no such thing.\n");
             continue;
         }
 
         if(!strcmp(o->at, "inventory") && !strcmp(o->at, currentLocation)) {
-            printf("You can't see that.");
+            printwr("You can't see that.");
             continue;
         }
 

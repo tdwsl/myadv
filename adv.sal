@@ -1,30 +1,29 @@
 ; the script for the adventure
 ; sal stands for silly adventure lisp
 
-(valid take drop look examine open close lock unlock use)
+(valid take drop look examine open close lock unlock use climb read)
 
 ;; default verbs
 (set-var def-take
   '(if (has inventory (x))
     '(print "You already have that.")
-    '(if (>= (items inventory) 10)
+    '(if (>= (items inventory) 4)
       '(print "You can't carry any more.")
       '(begin
         (set-at (x) inventory)
         (print "Took " (x) .)))))
 (default take (get-var def-take))
 
-(default drop
+(set-var def-drop
   '(if (has inventory (x))
     '(begin
       (set-at (x) (here))
       (print "Dropped " (x) .))
     '(print "You don't have that.")))
+(default drop (get-var def-drop))
 
 (default examine
-  '(begin
-    (list-objects items "It contains ")
-    (print "You see nothing special about it.")))
+  '(print "You see nothing special about the " (x) .))
 
 (default eat
   '(if (has inventory (x))
@@ -39,8 +38,17 @@
 (location void "The Void" "You shouldn't be here! This is where objects go to die.")
 ;; end containers
 
-(location house-front "Front of House" "You are standing out the front of the house, facing north toward it.")
+(location house-front "Front of House" "You are standing out the front of the house, facing north toward it. The house itself has woodchip under white paint walls.")
 (goto house-front)
+
+(object dirt "some dirt" forest-path)
+(object leaves "a pile of leaves" forest-path)
+(object penny "a penny" riverside)
+(object bat "a baseball bat" clearing)
+(object art "a priceless work of art" living-room)
+(object fork "a fork" living-room)
+(how fork examine
+  '(print "You definately couldn't climb a cliff with this."))
 
 (object door "a door" house-front)
 (how door take
@@ -86,7 +94,7 @@
         (set-at key clearing)
         (how rock take (get-var def-take))))))
 
-(location living-room "Living Room" "The room has green walls and plank flooring.")
+(location living-room "Living Room" "The room has green walls and plank flooring. All of the doors in the house are boarded up.")
 (set-exit living-room s house-front)
 
 (location forest-path "Forest Path" "A nice little path in the forest.")
@@ -94,22 +102,40 @@
 (set-exit forest-path w house-front)
 
 (location clearing "Clearing" "You have come to a clearing. A nice warm breeze blows through the grass.")
-(set-exit clearing s forest-path)
-(set-exit forest-path n clearing)
+(set-exit clearing sw forest-path)
+(set-exit forest-path ne clearing)
 
-(location riverside "By The River" "Next to the river. The evening light reflects off the pale green water.
-There is a boat here that you could use to cross.")
+(location riverside "By The River" "Next to the river. The evening light reflects off the pale green water. There is a boat here that you could use to cross.")
 (set-exit riverside n forest-path)
 (set-exit forest-path s riverside)
 
+(object note "a note" house-front)
+(how note examine
+  '(print "A nice paper note. You could read it."))
+(how note read
+  '(begin
+    (print "Welcome to the *adventure*!")
+    (print "The objective of the game is...")
+    (print "To find the *vase*")
+    (print "...and return it to the *Living Room*!")
+    (print "Yeah, it isn't much.")
+    (print "As for score, you don't have one, so do whatever.")))
+
 (object shovel "a rusty old shovel" living-room)
 (how shovel use
-  '(if (and (= (here) cave) (= (get-exit cave d) nil))
+  '(if (= (here) cave)
     '(begin
-      (print "You dig through the sand.")
+      (print "You dig through the sand - the shovel breaks!")
+      (set-at shovel void)
       (description cave "A dark, sand-free cave.")
       (set-exit cave d pit))
     '(print "You'd do better somewhere with sand.")))
+
+(object iceaxe "an iceaxe" riverside)
+(how iceaxe examine
+  '(print "Yeah, you could climb a cliff with this."))
+
+(object ball "a tennis ball" living-room)
     
 (object boat "a wooden boat" riverside)
 (how boat use
@@ -120,12 +146,38 @@ There is a boat here that you could use to cross.")
     '(print "You need something to row with.")))
 (how boat take nil)
 
-(location beach "Shale Beach" "The pebbles on this shale beach make you uneven on your feet.
-A river leads north. You can see a cave.")
+(location beach "Shale Beach" "The pebbles on this shale beach make you uneven on your feet. A cliff rises up to the north, with a river cutting through it. You can see a cave to the southwest.")
 (set-exit beach sw cave)
+
+(object cliff "a sheer cliff" beach)
+(how cliff take
+  '(print "The phrase, 'moving mountains' - it isn't supposed to be literal."))
+(how cliff climb
+  '(if (has inventory iceaxe)
+    '(begin
+      (print "You climb up the cliff using the iceaxe.")
+      (goto mountain))
+    '(print "It's too steep - you'd need something to climb it with.")))
+
+(location mountain "Mountain Top" "The top of the mountain. It's some view up here. There is a slope to the north that you could slide down.")
+(set-exit mountain n house-front)
 
 (location cave "Dark Cave" "Shadows creep along the walls of this cave. There is sand here.")
 (set-exit cave ne beach)
 
 (location pit "Pit" "You have made it to a pit, situated below the cave.")
 (set-exit pit u cave)
+
+(location podium "Type 'quit' to quit" "The podium's where you're at, bronze silver and gold, it all goes to you! There isn't much to do here, except for typing 'quit' to quit.")
+
+(object vase "a vase" pit)
+(how vase examine
+  '(print "You NEED this. Drop it off in the living room."))
+(how vase drop
+  '(begin
+    (if t (get-var def-drop))
+    (if (= (here) living-room)
+      '(begin
+        (print "You win!!!!!!!")
+        (print "Wow, you really hit it out of the park! Great job!")
+        (goto podium)))))
